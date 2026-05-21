@@ -139,12 +139,12 @@ runs:
           MODULE: ${{ inputs.module }}
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
-      # - name: Download Dockerfile.injector
-      #   if: ${{ inputs.download_binaries == 'true' }}
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: injector-dockerfile
-      #     path: ${{ github.workspace }}
+      - name: Download Dockerfile.injector
+        if: ${{ inputs.download_binaries == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+            name: injector-dockerfile
+            path: ${{ github.workspace }}
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
