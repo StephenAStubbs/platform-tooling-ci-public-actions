@@ -162,7 +162,20 @@ runs:
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           MODULE: ${{ inputs.module }}
-        
+      - name: Additional debug info for injector builds
+        shell: bash
+        if: ${{ inputs.download_binaries == 'true' }}
+        run: |
+          echo "Workspace contents:"
+          find "$GITHUB_WORKSPACE/$MODULE" -maxdepth 3 -type f | sort
+
+          echo "Expected tarball:"
+          ls -lah "$GITHUB_WORKSPACE/$MODULE/$VERSION/IQGeo_${MODULE}_${VERSION}.tar.gz" || true
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          MODULE: ${{ inputs.module }}
+          VERSION: ${{ inputs.version }}    
+
       - name: build and push image (default context)
         shell: bash
         run: |
