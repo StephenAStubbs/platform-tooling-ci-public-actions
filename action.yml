@@ -75,7 +75,7 @@ runs:
     using: "composite"
     steps:
       - name: 'Checkout GitHub Action'
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
         
       - name: Checkout Language Packs
         uses: actions/checkout@v4
