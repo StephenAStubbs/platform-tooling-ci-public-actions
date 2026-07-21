@@ -177,19 +177,21 @@ runs:
           VERSION: ${{ inputs.version }}    
 
       - name: build and push image (default context)
+        id: build
         shell: bash
         run: |
           docker login -u $REGISTRY_USERNAME -p $REGISTRY_PASWORD $ACR
-          docker build \
-            --provenance=false \
-            --sbom=false \
+          docker buildx build \
+            --provenance=true \
+            --sbom=true \
+            --push \
+            --metadata-file /tmp/build-metadata.json \
             --build-arg MODULE=$MODULE \
             --build-arg VERSION=$VERSION \
             --build-arg SHORTENED_VERSION=$SHORTENED_VERSION \
             --build-arg CUTPATH=$MODULE \
             -f $GITHUB_WORKSPACE/$DOCKERFILE $CONTEXT_BUILD \
             -t $ACR/$ENGINEERING_PREFIX/$MODULE_LOWERCASE:$TAG
-          docker push $ACR/$ENGINEERING_PREFIX/$MODULE_LOWERCASE:$TAG
         env:
           VERSION: ${{ inputs.version }}
           SHORTENED_VERSION: ${{ inputs.shortened_version }}
@@ -206,3 +208,17 @@ runs:
           REGISTRY_USERNAME: ${{ inputs.registry_username }}
           REGISTRY_PASWORD: ${{ inputs.registry_password}}
           ENGINEERING_PREFIX: ${{ inputs.engineering_prefix }}
+
+      - name: Extract image digest
+        id: digest
+        shell: bash
+        run: |
+          DIGEST=$(jq -r '."containerimage.digest"' /tmp/build-metadata.json)
+          echo "value=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ inputs.acr }}/${{ inputs.engineering_prefix }}/${{ inputs.module_lowercase }}
+          subject-digest: ${{ steps.digest.outputs.value }}
+          push-to-registry: true
