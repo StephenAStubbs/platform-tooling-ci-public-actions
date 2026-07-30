@@ -183,7 +183,6 @@ runs:
           docker login -u $REGISTRY_USERNAME -p $REGISTRY_PASWORD $ACR
           docker buildx build \
             --provenance=true \
-            --sbom=true \
             --push \
             --metadata-file /tmp/build-metadata.json \
             --build-arg MODULE=$MODULE \
@@ -218,6 +217,34 @@ runs:
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate SBOM from image layers
+        shell: bash
+        env:
+          DIGEST: ${{ steps.digest.outputs.value }}
+          ACR: ${{ inputs.acr }}
+          ENGINEERING_PREFIX: ${{ inputs.engineering_prefix }}
+          MODULE_LOWERCASE: ${{ inputs.module_lowercase }}
+        run: |
+          syft "registry:${ACR}/${ENGINEERING_PREFIX}/${MODULE_LOWERCASE}@${DIGEST}" \
+            --output spdx-json \
+            > /tmp/sbom.spdx.json
+
+      - name: Attach SBOM attestation with cosign
+        shell: bash
+        env:
+          DIGEST: ${{ steps.digest.outputs.value }}
+          ACR: ${{ inputs.acr }}
+          ENGINEERING_PREFIX: ${{ inputs.engineering_prefix }}
+          MODULE_LOWERCASE: ${{ inputs.module_lowercase }}
+        run: |
+          cosign attest --yes \
+            --predicate /tmp/sbom.spdx.json \
+            --type spdxjson \
+            "${ACR}/${ENGINEERING_PREFIX}/${MODULE_LOWERCASE}@${DIGEST}"
 
       - name: Sign image with cosign keyless
         shell: bash
