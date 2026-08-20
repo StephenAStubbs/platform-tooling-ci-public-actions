@@ -70,6 +70,10 @@ inputs:
     description: 'Engineering prefix to place multi arch images in Harbor'
     type: string
     default: devops_sandbox_engineering
+  sbom_generator:
+    description: 'Shared BuildKit SBOM generator image (directory-mode syft scan so lockfile packages are included). Module- and version-agnostic; lives at a fixed path, not under engineering_prefix.'
+    type: string
+    default: iqgeoproddev.azurecr.io/engineering/sbom-generator:1
 
 runs:
     using: "composite"
@@ -183,7 +187,7 @@ runs:
           docker login -u $REGISTRY_USERNAME -p $REGISTRY_PASWORD $ACR
           docker buildx build \
             --provenance=true \
-            --sbom=true \
+            --sbom=generator=$SBOM_GENERATOR \
             --push \
             --metadata-file /tmp/build-metadata.json \
             --build-arg MODULE=$MODULE \
@@ -208,6 +212,7 @@ runs:
           REGISTRY_USERNAME: ${{ inputs.registry_username }}
           REGISTRY_PASWORD: ${{ inputs.registry_password}}
           ENGINEERING_PREFIX: ${{ inputs.engineering_prefix }}
+          SBOM_GENERATOR: ${{ inputs.sbom_generator }}
 
       - name: Extract image digest
         id: digest
