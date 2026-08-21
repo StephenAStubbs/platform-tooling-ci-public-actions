@@ -70,6 +70,10 @@ inputs:
     description: 'Engineering prefix to place multi arch images in Harbor'
     type: string
     default: devops_sandbox_engineering
+  sbom_generator:
+    description: 'Shared BuildKit SBOM generator image (directory-mode syft scan so lockfile packages are included). Module- and version-agnostic; lives at a fixed path, not under engineering_prefix.'
+    type: string
+    default: iqgeoproddev.azurecr.io/engineering/sbom-generator:1
 
 runs:
     using: "composite"
@@ -177,19 +181,21 @@ runs:
           VERSION: ${{ inputs.version }}    
 
       - name: build and push image (default context)
+        id: build
         shell: bash
         run: |
           docker login -u $REGISTRY_USERNAME -p $REGISTRY_PASWORD $ACR
-          docker build \
-            --provenance=false \
-            --sbom=false \
+          docker buildx build \
+            --provenance=true \
+            --sbom=generator=$SBOM_GENERATOR \
+            --push \
+            --metadata-file /tmp/build-metadata.json \
             --build-arg MODULE=$MODULE \
             --build-arg VERSION=$VERSION \
             --build-arg SHORTENED_VERSION=$SHORTENED_VERSION \
             --build-arg CUTPATH=$MODULE \
             -f $GITHUB_WORKSPACE/$DOCKERFILE $CONTEXT_BUILD \
             -t $ACR/$ENGINEERING_PREFIX/$MODULE_LOWERCASE:$TAG
-          docker push $ACR/$ENGINEERING_PREFIX/$MODULE_LOWERCASE:$TAG
         env:
           VERSION: ${{ inputs.version }}
           SHORTENED_VERSION: ${{ inputs.shortened_version }}
@@ -206,3 +212,25 @@ runs:
           REGISTRY_USERNAME: ${{ inputs.registry_username }}
           REGISTRY_PASWORD: ${{ inputs.registry_password}}
           ENGINEERING_PREFIX: ${{ inputs.engineering_prefix }}
+          SBOM_GENERATOR: ${{ inputs.sbom_generator }}
+
+      - name: Extract image digest
+        id: digest
+        shell: bash
+        run: |
+          DIGEST=$(jq -r '."containerimage.digest"' /tmp/build-metadata.json)
+          echo "value=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign keyless
+        shell: bash
+        env:
+          DIGEST: ${{ steps.digest.outputs.value }}
+          ACR: ${{ inputs.acr }}
+          ENGINEERING_PREFIX: ${{ inputs.engineering_prefix }}
+          MODULE_LOWERCASE: ${{ inputs.module_lowercase }}
+        run: |
+          cosign sign --yes \
+            "${ACR}/${ENGINEERING_PREFIX}/${MODULE_LOWERCASE}@${DIGEST}"
